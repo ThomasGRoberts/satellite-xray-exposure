@@ -1,0 +1,94 @@
+{
+  "source": "CelesTrak",
+  "gp_query": "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json",
+  "satcat_query": "https://celestrak.org/pub/satcat.csv",
+  "retrieval_utc": "20260917T114619Z",
+  "active_gp_count": 16559,
+  "payload_count": 16557,
+  "filter": "SATCAT OBJECT_TYPE == PAY; rocket bodies, debris, unknown and D excluded",
+  "excluded_counts": {
+    "R/B": 2,
+    "DEB": 0,
+    "UNK": 0,
+    "D": 0,
+    "other": 0
+  },
+  "unmatched_count": 0,
+  "orbital_element_epoch_min": "2026-08-21T09:32:35.937888",
+  "orbital_element_epoch_max": "2026-09-21T14:50:11.752512",
+  "snapshot": "celestrak-active-payloads-20260917T114619Z.json",
+  "gp_raw_file": "celestrak-active-raw-20260917T114619Z.json",
+  "satcat_raw_file": "celestrak-satcat-raw-20260917T114619Z.csv",
+  "sha256": "c4bb2537a9b06ae24d2ae9160ff6499467c9f45230954ac8998e40b3cfc11641",
+  "gcat": {
+    "release": "1.8.8",
+    "data_update": "2026-09-16",
+    "retrieval_utc": "20260917T180525Z",
+    "tables": [
+      "https://planet4589.org/space/gcat/tsv/cat/psatcat.tsv",
+      "https://planet4589.org/space/gcat/tsv/cat/psatcat100k.tsv"
+    ],
+    "raw_files": [
+      "gcat-psatcat-raw-20260917T180525Z.tsv",
+      "gcat-psatcat100k-raw-20260917T180525Z.tsv"
+    ],
+    "raw_file_sha256": {
+      "gcat-psatcat-raw-20260917T180525Z.tsv": "725fd72ea726ffb2ffbfcce29867179b95fb9f8a1786b77661c48f25ad5e86f2",
+      "gcat-psatcat100k-raw-20260917T180525Z.tsv": "82ba9f29fb8729da31346af10591aaf571759d02bd8d0f3f1a9c28ddc372a765"
+    },
+    "join": "normalized exact COSPAR: orbital OBJECT_ID == GCAT Piece; no fuzzy fallback",
+    "citation": "McDowell, Jonathan C., 2020. General Catalog of Artificial Space Objects, https://planet4589.org/space/gcat",
+    "license": "CC BY 4.0",
+    "source_rows": 28563,
+    "processed_count": 16557,
+    "matched_count": 16540,
+    "matched_percent": 99.897324,
+    "classified_count": 16534,
+    "classified_percent": 99.861086,
+    "unmatched_count": 17,
+    "matched_unclassified_count": 6,
+    "class_code_counts": {
+      "A": 284,
+      "B": 14513,
+      "BD": 5,
+      "C": 872,
+      "CB": 4,
+      "CD": 5,
+      "D": 851
+    },
+    "category_counts": {
+      "Civil": 1165,
+      "Commercial": 14522,
+      "Military": 861
+    },
+    "overlapping_category_count": 14,
+    "unclassified_count": 23,
+    "unmatched_norad_ids": [
+      "25160",
+      "53109",
+      "55447",
+      "56148",
+      "58851",
+      "60468",
+      "61768",
+      "62657",
+      "66515",
+      "67248",
+      "67250",
+      "67481",
+      "68631",
+      "69328",
+      "100082",
+      "100614",
+      "100690"
+    ],
+    "matched_unclassified_norad_ids": [
+      "68754",
+      "68758",
+      "68759",
+      "68762",
+      "68763",
+      "68764"
+    ]
+  }
+}

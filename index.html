@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Estimating Satellite X-ray Exposure from Nuclear Detonations in Orbit</title><link rel="stylesheet" href="style.css"></head>
+<body>
+  <div id="ui">
+    <h1>Estimating Satellite X-ray Exposure from Nuclear Detonations in Orbit</h1>
+    <p class="introText">Explore how the detonation conditions of a nuclear-armed orbital platform shape prompt X-ray exposure across the satellite population.</p>
+    <section id="configureSection" class="panelSection configureSection">
+      <span class="subsectionLabel configureTitle">Configure detonation</span>
+      <div id="configureBody">
+      <fieldset id="yieldControlGroup" class="scenarioControlGroup" aria-disabled="true" disabled>
+        <legend class="parameterTitle">Weapon yield</legend>
+        <div class="yieldSwitch" aria-label="Weapon yield"><button data-yield="10">10 kt</button><button data-yield="100" class="activeYield">100 kt</button><button data-yield="500">500 kt</button><button data-yield="1000">1 Mt</button></div>
+      </fieldset>
+      <fieldset id="carrierControlGroup" class="scenarioControlGroup carrierControlGroup" aria-disabled="true" disabled>
+        <legend class="parameterTitle carrierLabel">Carrier orbit</legend>
+        <div class="orbitChoiceRow"><button id="randomOrbitBtn" class="randomOrbitBtn" type="button" disabled>Generate orbit</button><span class="orSeparator">or</span><div class="orbitSearchWrap"><input id="orbitSearch" type="search" aria-label="Select a satellite" placeholder="Search satellite name or COSPAR ID…" autocomplete="off" disabled></div></div>
+        <div class="currentOrbitRow"><span id="selectedOrbitSummary">2,000 km altitude · 67.1° inclination</span><button id="orbitEditorToggle" type="button" aria-expanded="false" disabled>Adjust parameters ▾</button></div>
+        <div id="orbitEditorBody" class="orbitEditorBody" hidden>
+          <div class="orbitEditorTitle">Adjust Orbital Elements</div>
+          <label>Semimajor axis <output id="semiMajorValue">8,378 km</output><input id="semiMajorSlider" type="range" min="6528" max="50000" step="10" value="8378"></label>
+          <label>Eccentricity <output id="eccentricityValue">0.000</output><input id="eccentricitySlider" type="range" min="0" max="0.9" step="0.001" value="0"></label>
+          <label>Inclination <output id="inclinationValue">67.1°</output><input id="inclinationSlider" type="range" min="0" max="180" step="0.1" value="67.1"></label>
+          <label>Right ascension of ascending node <output id="raanValue">35.0°</output><input id="raanSlider" type="range" min="0" max="360" step="0.1" value="35"></label>
+          <label>Argument of periapsis <output id="argPerigeeValue">0.0°</output><input id="argPerigeeSlider" type="range" min="0" max="360" step="0.1" value="0"></label>
+          <label>Anomaly <output id="anomalyValue">0.0°</output><input id="anomalySlider" type="range" min="0" max="360" step="0.1" value="0"></label>
+        </div>
+        <p id="orbitConstraintMessage" class="orbitConstraintMessage" role="status" hidden>Minimum permitted perigee: 100 km.</p>
+      </fieldset>
+      </div>
+    </section>
+    <div class="orbitActionRow persistentScenarioAction">
+      <div class="detonateRow"><button id="detonateBtn" class="detonateBtn" disabled><span class="detonateGlyph"></span>Detonate</button></div>
+    </div>
+    <section id="fluenceResults" class="fluenceResults" aria-live="polite" hidden>
+      <span class="configureTitle resultsSectionTitle">Results</span>
+      <div class="resultsHeading"><span>Prompt X-ray Exposure</span></div>
+      <p id="resultsDescription" class="illustrativeSpeedNote">Modeled X-ray fluence for the selected detonation.</p>
+      <div class="histogramWrap"><svg id="fluenceDensityChart" role="img" aria-label="Smoothed satellite count distribution by prompt X-ray fluence with draggable analysis-threshold line"></svg></div>
+      <div class="playbackRow resultsPlayback" aria-label="Post-detonation playback controls"><button id="resultsPlayBtn" class="miniControl playPauseMini" type="button" title="Play / Pause" aria-label="Play post-detonation movement" disabled><span class="playIcon"></span></button><input id="resultsTimelineSlider" type="range" min="0" max="24" step="0.01" value="0" aria-label="Post-detonation time in hours" disabled><span id="resultsTimelineTime" aria-live="polite">00:00</span><button id="resultsSpeedDownBtn" class="miniControl speedMini" type="button" title="Slow down" aria-label="Slow down" disabled><span class="doubleTriangle doubleTriangleLeft"></span></button><button id="resultsSpeedUpBtn" class="miniControl speedMini" type="button" title="Speed up" aria-label="Speed up" disabled><span class="doubleTriangle doubleTriangleRight"></span></button></div>
+      <button id="resultsDisclosureBtn" class="primaryResult" type="button" aria-expanded="false" aria-controls="resultsDetails"><strong id="aboveThresholdCount">—</strong><span class="primaryResultCopy"><span id="aboveThresholdLabel">Satellites exposed to more than<br><em id="selectedThresholdParameter" title="Drag the threshold line in the density plot to change this value">40 J/m²</em></span></span><span class="resultDisclosureGlyph" aria-hidden="true"></span></button>
+      <div id="resultsDetails" class="resultsDetails" hidden>
+      <div class="analysisHeadingRow"><div><span class="parameterTitle">Exposed Satellite Population</span><p id="categoryStateHelp">Select a row to highlight or exclude classes of satellites.</p></div><button id="clearDrilldownsBtn" type="button" disabled>Clear Filters</button></div>
+      <div id="affectedDashboard" class="affectedDashboard">
+        <article class="analysisCard"><div class="analysisCardHeader"><h3>Country / Owner</h3><span id="countryBreakdownSummary"></span></div><div id="countryBreakdown" class="categoryBreakdown" role="group" aria-label="Exposed satellites by country or owner" aria-describedby="categoryStateHelp"></div></article>
+        <article class="analysisCard"><div class="analysisCardHeader"><h3>Mission Class</h3><span id="missionBreakdownSummary"></span></div><div id="missionBreakdown" class="categoryBreakdown" role="group" aria-label="Exposed satellites by mission class" aria-describedby="categoryStateHelp"></div></article>
+        <article class="analysisCard"><div class="analysisCardHeader"><h3>Constellation</h3><span id="constellationBreakdownSummary"></span></div><div id="constellationBreakdown" class="categoryBreakdown" role="group" aria-label="Exposed satellites by GCAT program family" aria-describedby="categoryStateHelp"></div></article>
+      </div>
+      <section id="timingAnalysisDetails" class="timingAnalysis">
+        <div class="analysisHeadingRow timingAnalysisHeading"><div><span class="parameterTitle">Detonation Timing Analysis</span><p>Find the point in the carrier orbit that maximizes satellites exposed in Fleet A while minimizing exposure in Fleet B.</p></div></div>
+        <div class="timingSelectors">
+          <label>Fleet A<select id="timingFleetA" disabled><optgroup label="Countries"><option value="country:United States">United States</option><option value="country:Russia / CIS">Russia</option><option value="country:China">China</option></optgroup><optgroup label="Constellations"><option value="constellation:Starlink" selected>Starlink</option><option value="constellation:OneWeb">OneWeb</option><option value="constellation:Kuiper">Kuiper</option><option value="constellation:Qianfan">Qianfan</option><option value="constellation:Flock">Flock</option><option value="constellation:Iridium">Iridium</option><option value="constellation:Other">Other</option></optgroup></select></label>
+          <label>Fleet B<select id="timingFleetB" disabled><optgroup label="Countries"><option value="country:United States">United States</option><option value="country:Russia / CIS">Russia</option><option value="country:China">China</option></optgroup><optgroup label="Constellations"><option value="constellation:OneWeb" selected>OneWeb</option><option value="constellation:Starlink">Starlink</option><option value="constellation:Kuiper">Kuiper</option><option value="constellation:Qianfan">Qianfan</option><option value="constellation:Flock">Flock</option><option value="constellation:Iridium">Iridium</option><option value="constellation:Other">Other</option></optgroup></select></label>
+        </div>
+        <button id="timingAnalyzeBtn" type="button" disabled>Optimize</button>
+        <p id="timingAnalysisStatus" class="timingAnalysisStatus" role="status" hidden></p>
+        <div id="timingBattle" class="timingBattle" hidden>
+          <div class="timingBattleLabels"><strong id="timingBattleFleetA">Fleet A</strong><strong id="timingBattleFleetB">Fleet B</strong></div>
+          <div class="timingBattleTrack"><div id="timingBattleA" class="timingBattleA"></div><div id="timingBattleB" class="timingBattleB"></div></div>
+          <div id="timingAnalysisSummary" class="timingAnalysisSummary" hidden></div>
+        </div>
+      </section>
+      </div>
+      <div class="scenarioActions"><button id="copyShareLinkBtn" class="copyShareLinkBtn" type="button">Copy Scenario</button><button id="scenarioInfoBtn" class="scenarioInfoBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="scenarioInfoPopover">Works Cited</button></div>
+      <div id="scenarioInfoPopover" class="scenarioInfoPopover" role="dialog" aria-modal="false" aria-labelledby="scenarioInfoTitle" hidden><div class="scenarioInfoHeader"><strong id="scenarioInfoTitle">Works Cited</strong><button id="scenarioInfoCloseBtn" type="button" aria-label="Close Works Cited">×</button></div><div id="methodologyCitations" class="methodologyCitations"></div></div>
+    </section>
+    <div id="status"></div>
+  </div>
+  <button id="panelToggleBtn" type="button" aria-label="Hide control panel" aria-expanded="true">‹</button>
+  <div id="cameraControls"><button id="zoomInBtn" class="cameraBtn" title="Zoom in">+</button><button id="zoomOutBtn" class="cameraBtn" title="Zoom out">−</button><button id="viewToggleBtn" class="cameraBtn" title="Return to home view" aria-label="Return to home view">⌂</button></div>
+  <div id="orbitSearchResults" class="orbitSearchResults" aria-hidden="true"></div>
+  <div id="canvas-wrap"></div>
+  <div id="detonationWash" aria-hidden="true"></div>
+  <div id="satelliteTooltip" class="satelliteTooltip" role="tooltip" hidden></div>
+  <img id="gtLogo" src="assets/ESPL.png" alt="Engineering Space Policy Laboratory">
+  <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/","topojson-client":"https://cdn.jsdelivr.net/npm/topojson-client@3/+esm","satellite.js":"https://cdn.jsdelivr.net/npm/satellite.js@6.0.1/+esm"}}</script>
+  <script type="module" src="app.js"></script>
+</body></html>
