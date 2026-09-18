@@ -1,4 +1,4 @@
-import * as satellite from "https://cdn.jsdelivr.net/npm/satellite.js@6.0.1/+esm";
+import * as satellite from "./vendor/satellite.es.js";
 import { calculatePromptExposure } from "./prompt-effects.js";
 
 let catalog = [];

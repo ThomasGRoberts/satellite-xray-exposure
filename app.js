@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import * as topojson from "topojson-client";
-import * as satellite from "satellite.js";
+import * as topojson from "./vendor/topojson-client.js";
+import * as satellite from "./vendor/satellite.es.js";
 import { calculatePromptExposure, PERMANENT_DAMAGE_THRESHOLD_J_M2, thresholdRadiusMeters, segmentIntersectsSphere } from "./prompt-effects.js";
 
 const EARTH_RADIUS_KM = 6378.137;
@@ -129,7 +129,7 @@ function latLonToVector3(latDeg, lonDeg, radius = 1) {
 }
 
 async function loadWorldBoundaries() {
-  const response = await fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json");
+  const response = await fetch("data/geo/countries-110m.json");
   if (!response.ok) throw new Error(`World boundaries request failed: ${response.status}`);
   const topology = await response.json();
   topojson.feature(topology, topology.objects.countries).features.forEach(feature => addCountryBoundary(feature.geometry));
@@ -501,7 +501,12 @@ const ORBIT_SLIDER_IDS = ["semiMajorSlider", "eccentricitySlider", "inclinationS
 let anomalyEditing = false;
 
 function configurationLocked() { return appState === APP_STATES.LOADING || appState === APP_STATES.COUNTDOWN || appState === APP_STATES.DETONATION || appState === APP_STATES.RESULTS; }
+function thresholdIsInteractive() { return appState === APP_STATES.DETONATION || appState === APP_STATES.RESULTS; }
 function setAppState(nextState) {
+  if (nextState !== APP_STATES.LOADING && window.__visualizationStartupTimer) {
+    clearTimeout(window.__visualizationStartupTimer);
+    window.__visualizationStartupTimer = null;
+  }
   appState = nextState; isPlaying = nextState === APP_STATES.RUNNING;
   controls.enabled = nextState !== APP_STATES.COUNTDOWN;
   document.body.dataset.appState = nextState;
@@ -517,9 +522,10 @@ function setAppState(nextState) {
   document.querySelectorAll("[data-yield]").forEach(button => { button.disabled = locked; });
   document.getElementById("detonateBtn").disabled = nextState === APP_STATES.LOADING || nextState === APP_STATES.COUNTDOWN;
   const resultsInteractive = nextState === APP_STATES.RESULTS;
+  const thresholdInteractive = nextState === APP_STATES.DETONATION || resultsInteractive;
   ["resultsPlayBtn", "resultsTimelineSlider", "resultsSpeedDownBtn", "resultsSpeedUpBtn", "resultsDisclosureBtn", "copyShareLinkBtn", "scenarioInfoBtn", "timingFleetA", "timingFleetB", "timingAnalyzeBtn"].forEach(id => { document.getElementById(id).disabled = !resultsInteractive; });
   document.querySelectorAll(".analysisBreakdownButton").forEach(button => { button.disabled = !resultsInteractive; });
-  document.getElementById("fluenceDensityChart").setAttribute("aria-disabled", String(!resultsInteractive));
+  document.getElementById("fluenceDensityChart").setAttribute("aria-disabled", String(!thresholdInteractive));
   document.getElementById("clearDrilldownsBtn").disabled = !resultsInteractive || !hasActiveDrilldown();
   if (!resultsInteractive) closeScenarioInfo();
   if (locked) closeSearchResults();
@@ -1155,7 +1161,8 @@ function updateThreshold(value) {
   if (!blastResults || !Number.isFinite(value)) return;
   selectedAnalysisThreshold = THREE.MathUtils.clamp(value, blastResults.fluenceDomain[0], blastResults.fluenceDomain[1]);
   if (timingAnalysisResult && Math.abs(timingAnalysisResult.threshold - selectedAnalysisThreshold) > 1e-9) { const status = document.getElementById("timingAnalysisStatus"); status.textContent = "Selected threshold changed; rerun the timing analysis to update its counts."; status.hidden = false; }
-  renderFluenceDensity(appState === APP_STATES.DETONATION); updateAnalysisStats(); updateScenarioMetadata(); applyResultStyling();
+  renderFluenceDensity(appState === APP_STATES.DETONATION); updateAnalysisStats(); updateScenarioMetadata();
+  if (appState === APP_STATES.RESULTS) applyResultStyling();
 }
 
 function showFluenceResults() {
@@ -1191,7 +1198,7 @@ function animateThresholdTo(targetValue) {
   const animation = { cancelled: false, startedAt: performance.now(), duration: 460, fromLog: Math.log10(selectedAnalysisThreshold), toLog: Math.log10(targetValue) }; thresholdSlideAnimation = animation;
   window.__thresholdSlideAudit = { from: selectedAnalysisThreshold, to: targetValue, completed: false };
   function frame(now) {
-    if (animation.cancelled || appState !== APP_STATES.RESULTS) return;
+    if (animation.cancelled || !thresholdIsInteractive()) return;
     const progress = Math.min(1, (now - animation.startedAt) / animation.duration), eased = 1 - Math.pow(1 - progress, 3);
     updateThreshold(progress === 1 ? targetValue : 10 ** THREE.MathUtils.lerp(animation.fromLog, animation.toLog, eased));
     if (progress < 1) requestAnimationFrame(frame); else { thresholdSlideAnimation = null; window.__thresholdSlideAudit.completed = true; }
@@ -1199,7 +1206,8 @@ function animateThresholdTo(targetValue) {
   requestAnimationFrame(frame);
 }
 document.getElementById("fluenceDensityChart").addEventListener("pointerdown", event => {
-  cancelThresholdNudge(); if (appState !== APP_STATES.RESULTS) return;
+  cancelThresholdNudge(); if (!thresholdIsInteractive()) return;
+  event.currentTarget.setPointerCapture?.(event.pointerId);
   if (event.target.closest(".histogramThresholdControl")) { cancelThresholdSlide(); thresholdDragging = true; event.preventDefault(); updateThreshold(thresholdFromClientX(event.clientX)); return; }
   const rect = event.currentTarget.getBoundingClientRect(), svgY = (event.clientY - rect.top) / Math.max(1, rect.height) * DENSITY_CHART_GEOMETRY.height;
   if (svgY >= DENSITY_CHART_GEOMETRY.top && svgY <= DENSITY_CHART_GEOMETRY.height - DENSITY_CHART_GEOMETRY.bottom) { event.preventDefault(); animateThresholdTo(thresholdFromClientX(event.clientX)); }
@@ -1208,7 +1216,7 @@ addEventListener("pointermove", event => { if (thresholdDragging) updateThreshol
 addEventListener("pointerup", event => { if (!thresholdDragging) return; thresholdDragging = false; updateThreshold(thresholdFromClientX(event.clientX)); });
 document.getElementById("fluenceDensityChart").addEventListener("keydown", event => {
   cancelThresholdNudge(); cancelThresholdSlide();
-  if (appState !== APP_STATES.RESULTS || event.target.id !== "thresholdDragControl") return;
+  if (!thresholdIsInteractive() || event.target.id !== "thresholdDragControl") return;
   const [minimum, maximum] = blastResults.fluenceDomain, factor = 10 ** (event.shiftKey ? .1 : .025); let value = selectedAnalysisThreshold;
   if (event.key === "ArrowLeft" || event.key === "ArrowDown") value /= factor;
   else if (event.key === "ArrowRight" || event.key === "ArrowUp") value *= factor;
@@ -1288,7 +1296,7 @@ function resetPayloadEffects() {
   points.geometry.attributes.effectColor.needsUpdate = points.geometry.attributes.effectScale.needsUpdate = points.geometry.attributes.effectAlpha.needsUpdate = true;
   document.getElementById("fluenceResults").hidden = true;
   selectedAnalysisThreshold = 40; selectedCountryDrilldowns.clear(); selectedMissionDrilldowns.clear(); selectedConstellationDrilldowns.clear(); resultsPlaybackPlaying = false; resultsPlaybackMultiplier = 1; resultPlaybackSeconds = 0; resultFrameStart = NaN; resultFrame0 = resultFrame1 = null; resultPlaybackCatalogIds = []; resultVisualStates = []; resultPlaybackContinuityFrame = null; resultsHomeReturnStarted = false; thresholdNudgeShown = false; thresholdNudgeAnimation?.control?.removeAttribute("transform"); thresholdNudgeAnimation = null; cancelThresholdSlide(); timingAnalysisRunId++; timingAnalysisResult = null;
-  afterglowStartedAt = null; scene.background.copy(SKY_BASE_COLOR); document.body.dataset.sky = "base"; document.getElementById("detonationWash").style.opacity = "0"; closeScenarioInfo();
+  afterglowStartedAt = null; scene.background.copy(SKY_BASE_COLOR); document.body.dataset.sky = "base"; document.getElementById("detonationWash").style.opacity = "0"; hideBlastCircle(); closeScenarioInfo();
   document.getElementById("satelliteTooltip").hidden = true;
   document.getElementById("countryBreakdown").replaceChildren(); document.getElementById("missionBreakdown").replaceChildren(); document.getElementById("constellationBreakdown").replaceChildren(); document.getElementById("clearDrilldownsBtn").disabled = true; updateResultsPlaybackControls();
   document.getElementById("resultsDisclosureBtn").setAttribute("aria-expanded", "false"); document.getElementById("resultsDetails").hidden = true; document.getElementById("timingAnalysisSummary").hidden = true; document.getElementById("timingBattle").hidden = true; document.getElementById("timingAnalysisStatus").textContent = ""; document.getElementById("timingAnalysisStatus").hidden = true;
@@ -1301,41 +1309,45 @@ function updateBlastEffects(now, shellRadius) {
   const colors = points.geometry.attributes.effectColor.array, scales = points.geometry.attributes.effectScale.array, alphas = points.geometry.attributes.effectAlpha.array, color = new THREE.Color();
   for (const record of blastResults.records) {
     const resultIndex = record.catalogIndex, index = renderIndexByCatalogId.get(record.catalogId); if (index === undefined) continue;
-    if (!record.propagationValid) { alphas[index] = .16; continue; }
-    if (record.earthMasked) { colors[index * 3] = colors[index * 3 + 1] = colors[index * 3 + 2] = .36; alphas[index] = .34; scales[index] = 1; continue; }
+    if (!record.propagationValid || record.earthMasked) { scales[index] = 1; continue; }
     if (blastResults.distanceScene[resultIndex] > shellRadius) continue;
     if (blastResults.reachedAt[resultIndex] < 0) {
       blastResults.reachedAt[resultIndex] = now;
       fluenceColor(record.fluenceJm2, color);
-      colors[index * 3] = color.r; colors[index * 3 + 1] = color.g; colors[index * 3 + 2] = color.b; alphas[index] = .98;
+      colors[index * 3] = color.r; colors[index * 3 + 1] = color.g; colors[index * 3 + 2] = color.b;
+      alphas[index] = .98;
     }
-    const age = now - blastResults.reachedAt[resultIndex], aboveThreshold = record.fluenceJm2 >= selectedAnalysisThreshold;
-    if (age < 1450) scales[index] = 1 + 1.05 * Math.sin(Math.PI * Math.min(1, age / 1450));
-    else if (aboveThreshold) scales[index] = 1.72;
-    else scales[index] = 1 + .34 * Math.max(0, 1 - (age - 1450) / 2100);
+    scales[index] = 1;
   }
   if (now - blastResults.lastHistogramUpdate > 240) { renderFluenceDensity(true); blastResults.lastHistogramUpdate = now; }
-  points.geometry.attributes.effectColor.needsUpdate = points.geometry.attributes.effectScale.needsUpdate = points.geometry.attributes.effectAlpha.needsUpdate = true;
+  points.geometry.attributes.effectColor.needsUpdate = points.geometry.attributes.effectAlpha.needsUpdate = points.geometry.attributes.effectScale.needsUpdate = true;
 }
 function wavefrontPointEarthBlocked(burst, point) { return segmentIntersectsSphere(burst.toArray(), point.toArray(), 1); }
 
-function createFullBlastWaveMaterial({ color, opacity, rim = false }) {
-  const material = new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, depthTest: false, side: THREE.FrontSide,
-    uniforms: { uColor: { value: new THREE.Color(color) }, uOpacity: { value: opacity } },
-    vertexShader: `varying vec3 vNormalView; varying vec3 vViewDirection; void main(){ vec4 viewPosition=modelViewMatrix*vec4(position,1.0); vNormalView=normalize(normalMatrix*normal); vViewDirection=normalize(-viewPosition.xyz); gl_Position=projectionMatrix*viewPosition; }`,
-    fragmentShader: `uniform vec3 uColor; uniform float uOpacity; varying vec3 vNormalView; varying vec3 vViewDirection; void main(){ ${rim ? "float rimStrength=pow(1.0-abs(dot(normalize(vNormalView),normalize(vViewDirection))),1.65); float alpha=uOpacity*(0.13+0.87*rimStrength);" : "float alpha=uOpacity;"} if(alpha<0.001) discard; gl_FragColor=vec4(uColor,alpha); }`
-  });
-  material.userData.baseOpacity = opacity; material.userData.fullSphere = true; return material;
+function updateBlastCircle(progress, opacity) {
+  if (!blastShell) return;
+  const circle = document.getElementById("blastCircle"), projectedCenter = blastShell.position.clone().project(camera);
+  const centerX = (projectedCenter.x * .5 + .5) * innerWidth, centerY = (-projectedCenter.y * .5 + .5) * innerHeight;
+  const containedRadius = Math.max(2, Math.min(centerX, innerWidth - centerX, centerY, innerHeight - centerY) * .90), diameter = 2 * containedRadius * THREE.MathUtils.clamp(progress, 0, 1);
+  circle.hidden = false; circle.style.left = `${centerX}px`; circle.style.top = `${centerY}px`; circle.style.width = circle.style.height = `${diameter}px`; circle.style.opacity = opacity.toFixed(4);
+  window.__blastCircleGeometry = { centerX, centerY, diameter, containedRadius, equalDimensions: true };
 }
 
-function createBlastField() {
-  const group = new THREE.Group();
-  const shellMaterial = createFullBlastWaveMaterial({ color: 0xffd45a, opacity: .62, rim: true });
-  const shell = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 48), shellMaterial); shell.renderOrder = 24; group.add(shell);
-  return group;
+function hideBlastCircle() { const circle = document.getElementById("blastCircle"); circle.hidden = true; circle.style.opacity = "0"; }
+function createBlastField() { const anchor = new THREE.Object3D(); anchor.userData.screenSpaceDomCircle = true; return anchor; }
+function disposeBlastField() { hideBlastCircle(); if (!blastShell) return; scene.remove(blastShell); blastShell = null; }
+
+function applyStoredFluenceColors() {
+  if (!blastResults || !points) return;
+  const colors = points.geometry.attributes.effectColor.array, color = new THREE.Color();
+  blastResults.records.forEach(record => {
+    const index = renderIndexByCatalogId.get(record.catalogId); if (index === undefined) return;
+    if (!record.propagationValid || record.earthMasked) color.setRGB(.36, .36, .36);
+    else fluenceColor(record.fluenceJm2, color);
+    colors[index * 3] = color.r; colors[index * 3 + 1] = color.g; colors[index * 3 + 2] = color.b;
+  });
+  points.geometry.attributes.effectColor.needsUpdate = true;
 }
-function disposeBlastField() { if (!blastShell) return; scene.remove(blastShell); blastShell.traverse(child => { if (child.geometry) child.geometry.dispose(); if (child.material) child.material.dispose(); }); blastShell = null; }
 
 function createDetonationFlash(position, now) {
   disposeDetonationFlash();
@@ -1375,7 +1387,7 @@ function triggerDetonation(now) {
   window.__detonationAudit = { cameraMovingAtTrigger: Boolean(cameraTransition), elapsedMs: now - detonationSequence.startedAt, stationaryHoldMs: Math.max(0, now - detonationSequence.startedAt - COUNTDOWN_DURATION_MS), countdownHistory: [...detonationSequence.countdownHistory] };
   detonationSequence.triggered = true; blastShell = createBlastField(); blastShell.position.copy(detonationSequence.burstScene); blastShell.scale.setScalar(.001); scene.add(blastShell); createDetonationFlash(detonationSequence.burstScene, now);
   afterglowStartedAt = now; document.getElementById("detonationWash").style.opacity = "0"; scene.background.copy(SKY_AFTERGLOW_COLOR); document.body.dataset.sky = "afterglow";
-  window.__blastVisualAudit = { wavefrontCount: 1, sphereLayerCount: blastShell.children.filter(child => child.geometry?.type === "SphereGeometry").length, fullSphere: blastShell.children.every(child => child.material?.userData.fullSphere), earthCropping: false, centralFlash: true, pulseDurationMs: BLAST_ANIMATION_DURATION_MS, afterglowHoldMs: AFTERGLOW_HOLD_MS, afterglowFadeMs: AFTERGLOW_FADE_MS, cinematicWash: { riseMs: DETONATION_WASH_RISE_MS, holdMs: DETONATION_WASH_HOLD_MS, fadeMs: DETONATION_WASH_FADE_MS, maximumOpacity: DETONATION_WASH_MAX_OPACITY } };
+  window.__blastVisualAudit = { wavefrontCount: 1, screenSpaceDomCircle: blastShell.userData.screenSpaceDomCircle, viewportContained: true, earthCropping: false, satelliteImpact: "fluence-color-on-contact", exposureColorsDuringWave: true, centralFlash: true, pulseDurationMs: BLAST_ANIMATION_DURATION_MS, afterglowHoldMs: AFTERGLOW_HOLD_MS, afterglowFadeMs: AFTERGLOW_FADE_MS, cinematicWash: { riseMs: DETONATION_WASH_RISE_MS, holdMs: DETONATION_WASH_HOLD_MS, fadeMs: DETONATION_WASH_FADE_MS, maximumOpacity: DETONATION_WASH_MAX_OPACITY } };
   showFluenceResults(); blastStartedAt = now; setAppState(APP_STATES.DETONATION); const button = document.getElementById("detonateBtn"); button.dataset.detonated = "true"; button.textContent = "Reset"; window.__promptEffectsResult = blastResults;
 }
 
@@ -1425,11 +1437,11 @@ function animate() {
   if (blastShell && blastStartedAt !== null) {
     const elapsed = now - blastStartedAt, progress = Math.min(1, elapsed / BLAST_ANIMATION_DURATION_MS), eased = 1 - Math.pow(1 - progress, 3), shellRadius = Math.max(.001, blastWaveMaxScale * eased);
     blastShell.scale.setScalar(shellRadius);
-    blastShell.traverse(child => { if (!child.material) return; const opacity = child.material.userData.baseOpacity * Math.pow(1 - progress, .7); if (child.material.uniforms?.uOpacity) child.material.uniforms.uOpacity.value = opacity; else child.material.opacity = opacity; });
+    updateBlastCircle(eased, .94 * Math.pow(1 - progress, .7));
     if (appState === APP_STATES.DETONATION) updateBlastEffects(now, shellRadius);
     if (progress === 1 && appState === APP_STATES.DETONATION) {
       const baseScale = carrierSprite.userData.baseScale; carrierSprite.scale.set(baseScale, baseScale, 1);
-      applyResultStyling(); renderFluenceDensity(false); updateAnalysisStats(); setAppState(APP_STATES.RESULTS); resultsPlaybackPlaying = false; updateResultsPlaybackControls(); requestAnimationFrame(startThresholdNudge); blastStartedAt = null; disposeBlastField(); disposeDetonationFlash();
+      applyStoredFluenceColors(); applyResultStyling(); renderFluenceDensity(false); updateAnalysisStats(); setAppState(APP_STATES.RESULTS); resultsPlaybackPlaying = false; updateResultsPlaybackControls(); requestAnimationFrame(startThresholdNudge); blastStartedAt = null; disposeBlastField(); disposeDetonationFlash();
       window.__carrierStyleAudit = { before: detonationSequence?.carrierStyleBefore || null, after: carrierStyleSignature() };
     }
   }

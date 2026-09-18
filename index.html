@@ -69,9 +69,19 @@
   <div id="cameraControls"><button id="zoomInBtn" class="cameraBtn" title="Zoom in">+</button><button id="zoomOutBtn" class="cameraBtn" title="Zoom out">−</button><button id="viewToggleBtn" class="cameraBtn" title="Return to home view" aria-label="Return to home view">⌂</button></div>
   <div id="orbitSearchResults" class="orbitSearchResults" aria-hidden="true"></div>
   <div id="canvas-wrap"></div>
+  <div id="blastCircle" aria-hidden="true" hidden></div>
   <div id="detonationWash" aria-hidden="true"></div>
   <div id="satelliteTooltip" class="satelliteTooltip" role="tooltip" hidden></div>
   <img id="gtLogo" src="assets/ESPL.png" alt="Engineering Space Policy Laboratory">
-  <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/","topojson-client":"https://cdn.jsdelivr.net/npm/topojson-client@3/+esm","satellite.js":"https://cdn.jsdelivr.net/npm/satellite.js@6.0.1/+esm"}}</script>
+  <script>
+    window.__visualizationStartupTimer = window.setTimeout(function () {
+      if (document.body.dataset.appState && document.body.dataset.appState !== "loading") return;
+      var status = document.getElementById("status");
+      status.style.display = "block";
+      status.className = "loadError";
+      status.textContent = "The visualization could not finish starting. Reload this page; if the problem continues, verify that the local vendor and catalog files were published with the application.";
+    }, 20000);
+  </script>
+  <script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/three-addons/"}}</script>
   <script type="module" src="app.js"></script>
 </body></html>
